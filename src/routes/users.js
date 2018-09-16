@@ -7,11 +7,11 @@ var router = express.Router();
 var User = require('../models/user').User;
 
 // import middleware
-var mid = require('../middleware/auth');
+var auth = require('../middleware/auth');
 var formatError = require('../middleware/format-error');
 
 // GET /api/users - Returns the current user
-router.get('/', mid.authenticate, function(req, res, next) {
+router.get('/', auth, function(req, res, next) {
 	
 	res.send({
 		_id: req.user._id,

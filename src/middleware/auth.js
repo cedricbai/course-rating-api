@@ -2,59 +2,42 @@
 
 var User = require('../models/user').User;
 
-var auth = require('basic-auth');
+var basicAuth = require('basic-auth');
 var bcrypt = require('bcrypt');
 
-function authenticate(req, res, next) {
 
-	// If credentials are available, then attempt to get the user 
-	// from the database by their email address.
-	if (auth(req)) {
-		
-		// parse authorization header
-		var userCredential = auth(req);
+var auth = function (req, res, next){
 
-		// check email in the database
-		User.findOne({ 
-			emailAddress: userCredential.name
-		}).exec(function(err, user) {
-			if (error) {
-				return next(err);
-			} else if (!user) {
-				var error = new Error('User is not found');
-	          	error.status = 401;
-	          	return next(err);
-			}
+  // Parse the Authorization header credentials
+  var user = basicAuth(req);
 
-			// If a user was found for the provided email address, 
-			// then check the user's password.
-	        bcrypt.compare(userCredential.pass, user.password, function(err, result) {
 
-	        	if (error) {
-	        		return next(err);
-	        	} else if (result === true) {
-	        		// If they match, then set the user's information on the request 
-	        		// so that each following middleware function has access to it.
-	        		
-	        		req.user = user;
+  function unauthorised (res) {
+    return res.sendStatus(401);
+  }
 
-	        		return next();
-	        	} else {
-	        		var error = new Error('Password is not matching');
-	          		error.status = 401;
-	          		return next(err);
-	        	}
-	        
-	        }); // end of bcrypt
+  // If the user, user.name or user.pass don't exist
+  if (!user || !user.name || !user.pass) {
+    // Return unauthorised
+    return unauthorised(res);
+  } else {
 
-		}); // end of User.findOne
+    User.findOne({emailAddress: user.name}, function (err, email) {
+      if (err) return next(err);
+      if (email) {
+        if (bcrypt.compareSync(user.pass, email.password)) {
+          req.user = email;
+          return next();
+        } else {
+          return unauthorised(res);
+        }
+      } else {
+        // If user isn't in database
+        return unauthorised(res);
+      }
+    });
 
-	} else {
-		var err = new Error('You are not authorized');
-		err.status = 404;
-		return next(err);
-	}
+  }
+};
 
-}
-
-module.exports.authenticate = authenticate
+module.exports = auth;

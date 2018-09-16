@@ -10,7 +10,7 @@ var Review = require('../models/review').Review;
 
 // import middleware
 var formatError = require('../middleware/format-error');
-var mid = require('../middleware/auth');
+var auth = require('../middleware/auth');
 
 
 // GET /api/courses - Returns a list of courses
@@ -24,8 +24,7 @@ router.get('/', function(req, res, next) {
 });
 
 // POST /api/courses - Create a course
-router.post('/', mid.authenticate, function(req, res, next) {
-
+router.post('/', auth, function(req, res, next) {
 	Course.create(req.body, function(err) {
 		if (err) {
 			formatError(err, req, res, next);
@@ -38,6 +37,8 @@ router.post('/', mid.authenticate, function(req, res, next) {
 // GET /api/course/:id - Returns a single course
 router.get('/:cID', function(req, res, next) {
 	
+	// When returning a single course for the GET /api/courses/:id route, 
+	// use Mongoose population to load the related user and reviews documents.
 	Course.findById(req.params.cID)
 		.populate('reviews')
 		.populate('user' , '_id fullName')
@@ -48,9 +49,10 @@ router.get('/:cID', function(req, res, next) {
 });
 
 // PUT /api/courses/:id - Updates a course
-router.put('/:cID', mid.authenticate, function(req, res, next) {
+router.put('/:cID',auth, function(req, res, next) {
 
 
+	// The current user can only edit courses for themselves
   	if (req.body.user._id === req.user._id.toJSON()) {
 
   		var opt = { 
@@ -69,7 +71,7 @@ router.put('/:cID', mid.authenticate, function(req, res, next) {
 			} else {
 				return res.status(204).end();
 			}
-    	}); 
+    	}); // end of findOneAndUpdate
 
   	} else {
     	var err = new Error("Sorry, you can only edit a course for yourself.");
@@ -79,8 +81,8 @@ router.put('/:cID', mid.authenticate, function(req, res, next) {
 
 });
 
-// POST /api/courses/:courseId/reviews - 
-router.post('/:cID/reviews', mid.authenticate, function(req, res, next) {
+// POST /api/courses/:courseId/reviews - Creates a review for a specified course
+router.post('/:cID/reviews',auth, function(req, res, next) {
 	
 	// find course
 	Course.findById(req.params.cID)
@@ -102,6 +104,8 @@ router.post('/:cID/reviews', mid.authenticate, function(req, res, next) {
 					return next(err);
 				}
 				
+				//TODO: user can only post one review per course
+				// not happy with for loop here, need to explore better option
 				for (var i = 0; i < course.reviews.length; i++) {
         			if (course.reviews[i].user.toJSON() === req.user._id.toJSON()) {
           				var err = new Error('You can not have more than one review for this course');
@@ -138,8 +142,11 @@ router.post('/:cID/reviews', mid.authenticate, function(req, res, next) {
 					if (err) {
 						formatError(err, req, res, next);
 					} else {
-          				res.status(201).location('/courses/' + req.params.cID).end();
-          				
+
+						//TODO: send response
+          				res.status(201);
+          				res.location('/courses/' + req.params.cID);
+          				res.end();
         			}
 				});
 				
@@ -148,8 +155,8 @@ router.post('/:cID/reviews', mid.authenticate, function(req, res, next) {
 });
 
 // DELETE /api/courses/:courseId/reviews/:id - Deletes a review
-router.delete('/:cID/reviews/:rID', mid.authenticate, function(req, res, next) {
-
+router.delete('/:cID/reviews/:rID',auth, function(req, res, next) {
+	
 	var courseID = req.params.cID;
 	var reviewID = req.params.rID;
 	
@@ -174,9 +181,11 @@ router.delete('/:cID/reviews/:rID', mid.authenticate, function(req, res, next) {
 						err.status = 404;
 						return next(err);
 					} 
+
+					// Don't allow anyone to delete a review other than the course owner.
 					if (req.user._id.toJSON() === course.user._id.toJSON()) {
 						
-						
+						// Remove review from reviews array
 						review.remove(function(err) {
 							if (err) return next(err);
 							
@@ -187,19 +196,19 @@ router.delete('/:cID/reviews/:rID', mid.authenticate, function(req, res, next) {
 								if (err) return next(err);
 								res.status(204);
 								res.end();
-							}); 
-						}); 
+							}); // course.save
+						}); // end of review.remove
 
 					} else {
 						var err = new Error('Only review course owner can delete review');
 						err.status = 404;
 						return next(err);
 					}
-			}); 
-	}); 
+			}); // End of Course.findById
+	}); // End of Review.findById
 });
 
-
+/*** UNSUPPORTED ROUTE HANDLING ***/
 
 // PUT /api/courses
 router.put('/', function(req, res, next) {
